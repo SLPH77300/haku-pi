@@ -1,0 +1,238 @@
+[
+  {
+    "id": "tab_journal",
+    "type": "tab",
+    "label": "HAKU - Journal de bord auto",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "inj_poll",
+    "type": "inject",
+    "z": "tab_journal",
+    "name": "Poll 45s",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "45",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "8",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 110,
+    "y": 100,
+    "wires": [
+      [
+        "http_sk"
+      ]
+    ]
+  },
+  {
+    "id": "http_sk",
+    "type": "http request",
+    "z": "tab_journal",
+    "name": "GET Signal K (self)",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:3000/signalk/v1/api/vessels/self/",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 300,
+    "y": 100,
+    "wires": [
+      [
+        "fn_main"
+      ]
+    ]
+  },
+  {
+    "id": "fn_main",
+    "type": "function",
+    "z": "tab_journal",
+    "name": "Journal + moteur + polaire",
+    "func": "// ============ RÉGLAGES (édite ici) ============\nvar START_KN   = 1.0;   // départ si SOG au-dessus (kn)\nvar STOP_KN    = 0.5;   // arrivée si SOG en dessous (kn)\nvar STOP_MIN   = 5;     // minutes sous STOP_KN pour CLORE le trajet\nvar DEPTH_MAX  = 60;    var STOP_RADIUS = 0.10; // arrivée SEULEMENT si immobile (<0,1 MN) ET profondeur < 60 m (sinon dérive/large = trajet gardé ouvert)\nvar START_MIN  = 2;     // minutes au-dessus START_KN pour CONFIRMER le départ\n// Heuristique \"moteur estimé\"\nvar NOWIND_TWS = 2.5;   var NOWIND_STW = 3.0;  // règle A : quasi pas de vent + ça avance (assoupli gennaker 180m²)\nvar HIGH_TWA_DEG = 35;  var HIGH_STW   = 2.0;  // règle B : trop près du vent + vitesse\nvar USE_RULE_C = true;  var C_MARGIN   = 1.15; // règle C : dépasse la polaire théorique x marge (gennaker > A-spi VPP)\n// ==============================================\n\nvar MS2KN = 1/0.514444;\nvar now = Date.now();\nfunction f(x,n){ return (x==null)?'':(Math.round(x*Math.pow(10,n))/Math.pow(10,n)); }\nfunction z(n){ return (n<10?'0':'')+n; }\nfunction dts(ms){ var D=new Date(ms); return D.getFullYear()+'-'+z(D.getMonth()+1)+'-'+z(D.getDate())+' '+z(D.getHours())+':'+z(D.getMinutes()); }\n\n// ---- POLAIRES VPP Amel 50 (Berret-Racoupeau 19-01-2017) ----\nvar TWA_ROWS=[36,40,45,52,60,75,80,90,120,135,150,165,170,180];\nvar TWS_COLS=[4,8,12,16,20,25,30];\nvar POL=[\n[2.85,5.34,6.54,7.03,7.23,7.28,7.15],\n[3.23,5.88,7.02,7.48,7.68,7.79,7.77],\n[3.63,6.39,7.48,7.89,8.11,8.20,8.24],\n[4.29,7.04,7.97,8.30,8.54,8.71,8.78],\n[4.73,7.48,8.34,8.69,8.92,9.10,9.20],\n[5.15,7.87,8.85,9.21,9.42,9.65,9.81],\n[5.20,7.91,8.94,9.34,9.57,9.81,9.99],\n[5.17,7.95,9.01,9.57,9.83,10.12,10.35],\n[4.45,7.50,8.87,9.73,10.43,10.96,11.42],\n[3.63,6.66,8.34,9.32,10.16,11.18,12.12],\n[2.83,5.59,7.57,8.74,9.57,10.59,11.82],\n[2.33,4.70,6.72,8.16,9.11,10.09,11.17],\n[2.24,4.54,6.54,8.02,8.99,9.96,10.99],\n[2.12,4.31,6.27,7.78,8.80,9.74,10.69]];\nfunction interpRow(r,c,tw){ var v0=POL[r][c],v1=POL[r][c+1]; var t=(tw-TWS_COLS[c])/(TWS_COLS[c+1]-TWS_COLS[c]); return v0+t*(v1-v0); }\nfunction polarTarget(tws,twaDeg){\n  if(tws==null||twaDeg==null) return null;\n  var twa=Math.abs(twaDeg); if(twa>180) twa=360-twa;\n  var tw=tws; if(tw<TWS_COLS[0]) tw=TWS_COLS[0]; if(tw>TWS_COLS[6]) tw=TWS_COLS[6];\n  var c=0; while(c<TWS_COLS.length-2 && tw>TWS_COLS[c+1]) c++;\n  if(twa<TWA_ROWS[0]){ var base=interpRow(0,c,tw); return base*(twa/TWA_ROWS[0])*0.85; } // zone morte\n  var r=0; while(r<TWA_ROWS.length-2 && twa>TWA_ROWS[r+1]) r++;\n  var vr0=interpRow(r,c,tw), vr1=interpRow(r+1,c,tw);\n  var tt=(twa-TWA_ROWS[r])/(TWA_ROWS[r+1]-TWA_ROWS[r]);\n  return vr0+tt*(vr1-vr0);\n}\n\n// ---- lecture Signal K (objet vessels/self) ----\nvar d = msg.payload || {};\nfunction val(o,path){ var p=path.split('.'),x=o; for(var i=0;i<p.length;i++){ if(x==null) return undefined; x=x[p[i]]; } return x; }\nvar lat  = val(d,'navigation.position.value.latitude');\nvar lon  = val(d,'navigation.position.value.longitude');\nvar sogMs= val(d,'navigation.speedOverGround.value');\nvar stwMs= val(d,'navigation.speedThroughWater.value');\nvar twsMs= val(d,'environment.wind.speedTrue.value');\nvar twaR = val(d,'environment.wind.angleTrueWater.value');\nvar awaR = val(d,'environment.wind.angleApparent.value');\nvar twdR = val(d,'environment.wind.directionTrue.value');\nvar hdgR = val(d,'navigation.headingTrue.value'); if(hdgR==null) hdgR=val(d,'navigation.headingMagnetic.value');\nvar depthM= val(d,'environment.depth.belowTransducer.value'); if(depthM==null) depthM=val(d,'environment.depth.belowKeel.value'); if(depthM==null) depthM=val(d,'environment.depth.belowSurface.value'); var depth=(typeof depthM==='number')?depthM:null;\n\nvar sog = (typeof sogMs==='number')? sogMs*MS2KN : null;\nvar stw = (typeof stwMs==='number')? stwMs*MS2KN : null;\nvar tws = (typeof twsMs==='number')? twsMs*MS2KN : null;\nvar twaDeg = (typeof twaR==='number')? twaR*180/Math.PI : null;\nvar awaDeg = (typeof awaR==='number')? awaR*180/Math.PI : null;\nvar twdDeg = null;\nif(typeof twdR==='number') twdDeg=(twdR*180/Math.PI+360)%360;\nelse if(typeof twaR==='number' && typeof hdgR==='number') twdDeg=((hdgR+twaR)*180/Math.PI+360)%360;\n\nvar spd = (sog!=null)? sog : (stw!=null? stw : 0);\nvar spdM = (stw!=null)? stw : (sog!=null? sog : 0);\n\n// ---- heuristique moteur ----\nvar pol = polarTarget(tws, twaDeg);\nvar motor=false;\nvar aAbs=(twaDeg!=null)?Math.abs(twaDeg):null; if(aAbs!=null&&aAbs>180) aAbs=360-aAbs;\nif(tws!=null && tws<NOWIND_TWS && spdM>NOWIND_STW) motor=true;\nelse if(aAbs!=null && aAbs<HIGH_TWA_DEG && spdM>HIGH_STW) motor=true;\nelse if(USE_RULE_C && pol!=null){ if(spdM > pol*C_MARGIN + 0.3) motor=true; }\n\n// ---- nuit ? ----\nfunction isNight(la,lo){ if(typeof la!=='number') return false; var rad=Math.PI/180,dayMs=86400000,J1970=2440588,J2000=2451545,e=rad*23.4397; var dd=Date.now()/dayMs-0.5+J1970-J2000; var M=rad*(357.5291+0.98560028*dd); var C=rad*(1.9148*Math.sin(M)+0.02*Math.sin(2*M)+0.0003*Math.sin(3*M)); var L=M+C+rad*102.9372+Math.PI; var dec=Math.asin(Math.sin(e)*Math.sin(L)); var ra=Math.atan2(Math.sin(L)*Math.cos(e),Math.cos(L)); var lw=rad*-lo,phi=rad*la; var H=rad*(280.16+360.9856235*dd)-lw-ra; var alt=Math.asin(Math.sin(phi)*Math.sin(dec)+Math.cos(phi)*Math.cos(dec)*Math.cos(H))/rad; return alt<-0.833; }\nfunction distNM(a,b,c,e){var R=3440.065,p=Math.PI/180,x=(c-a)*p,y=(e-b)*p;var s=Math.sin(x/2)*Math.sin(x/2)+Math.cos(a*p)*Math.cos(c*p)*Math.sin(y/2)*Math.sin(y/2);return 2*R*Math.asin(Math.sqrt(s));}\nfunction cardinal(g){ if(g==null) return ''; var D=['N','NNE','NE','ENE','E','ESE','SE','SSE','S','SSO','SO','OSO','O','ONO','NO','NNO']; return D[Math.round(g/22.5)%16]; }\nfunction allure(a){ if(a==null) return ''; a=Math.abs(a); if(a>180) a=360-a; if(a<48)return'Près'; if(a<70)return'Bon plein'; if(a<100)return'Travers'; if(a<140)return'Largue'; if(a<160)return'Grand largue'; return'Vent arrière'; } // ALLURE = angle vent APPARENT (AWA), seuils editables\n\n// ---- état trajet ----\nvar t = global.get('trip') || null;\nvar lastTs = global.get('tripLastTs') || now;\nvar dtH=(now-lastTs)/3600000; if(dtH<0||dtH>1) dtH=0;\nglobal.set('tripLastTs', now);\n\nvar out1=null;\n\nif(!t || !t.active){\n  if(spd>START_KN){\n    var aboveSince=(t&&t.aboveSince)?t.aboveSince:now;\n    if(now-aboveSince >= START_MIN*60000){\n      t={active:true,startTs:aboveSince,startLat:lat,startLon:lon,lastLat:lat,lastLon:lon,dist:0,maxKn:spd,\n         sumSog:0,nSog:0,sumTws:0,nTws:0,sdir:0,cdir:0,ndir:0,sTwa:0,nTwa:0,sAwa:0,nAwa:0,sumPerf:0,nPerf:0,night:false,motorH:0,totH:0,stopSince:null,aboveSince:null};\n    } else { t={active:false,aboveSince:aboveSince,stopSince:null}; }\n  } else { t={active:false,aboveSince:null,stopSince:null}; }\n} else {\n  if(typeof lat==='number' && typeof t.lastLat==='number'){\n    var leg=distNM(t.lastLat,t.lastLon,lat,lon);\n    var maxLeg=(Math.max(spd,6)/3600)*(dtH*3600)*3+0.2;\n    if(leg<maxLeg) t.dist+=leg;\n    t.lastLat=lat; t.lastLon=lon;\n  } else if(typeof lat==='number'){ t.lastLat=lat; t.lastLon=lon; }\n  if(spd>t.maxKn) t.maxKn=spd;\n  if(sog!=null){ t.sumSog+=sog; t.nSog++; }\n  if(tws!=null){ t.sumTws+=tws; t.nTws++; }\n  if(twdDeg!=null){ t.sdir+=Math.sin(twdDeg*Math.PI/180); t.cdir+=Math.cos(twdDeg*Math.PI/180); t.ndir++; }\n  if(twaDeg!=null){ t.sTwa+=Math.abs(twaDeg); t.nTwa++; }\n  if(awaDeg!=null){ var aa=Math.abs(awaDeg); if(aa>180) aa=360-aa; t.sAwa+=aa; t.nAwa++; }\n  if(!motor && pol!=null && pol>0.5 && stw!=null && stw>1){ t.sumPerf+=stw/pol; t.nPerf++; }\n  if(isNight(lat,lon)) t.night=true;\n  t.totH+=dtH; if(motor) t.motorH+=dtH;\n\n  var deep=(typeof depth==='number' && depth>DEPTH_MAX);\n  if(spd<STOP_KN && !deep){\n    if(!t.stopSince){ t.stopSince=now; t.stopLat=lat; t.stopLon=lon; }\n    else if(typeof lat==='number' && typeof t.stopLat==='number' && distNM(t.stopLat,t.stopLon,lat,lon)>STOP_RADIUS){ t.stopSince=now; t.stopLat=lat; t.stopLon=lon; }\n    if(now-t.stopSince >= STOP_MIN*60000){\n      var endTs=t.stopSince, durH=(endTs-t.startTs)/3600000;\n      var jours=Math.max(1,Math.ceil(durH/24));\n      var vmoy=(t.nSog>0)?t.sumSog/t.nSog:(durH>0?t.dist/durH:0);\n      var twsMoy=(t.nTws>0)?t.sumTws/t.nTws:null;\n      var twdMoy=(t.ndir>0)?((Math.atan2(t.sdir,t.cdir)*180/Math.PI)+360)%360:null;\n      var twaMoy=(t.nTwa>0)?t.sTwa/t.nTwa:null;\n      var awaMoy=(t.nAwa>0)?t.sAwa/t.nAwa:null;\n      var motorPct=(t.totH>0)?t.motorH/t.totH*100:0;\n      var moteur=(t.motorH*60>=5)?'Oui (estimé)':'Non';\n      var perfMoy=(t.nPerf>0)?t.sumPerf/t.nPerf*100:null;\n      function pos(la,lo){ if(typeof la!=='number') return ''; return f(la,4)+' '+((la>=0)?'N':'S')+' / '+f(Math.abs(lo),4)+' '+((lo>=0)?'E':'O'); }\n      var fields={ date:dts(t.startTs).slice(0,10), depart:dts(t.startTs)+' '+pos(t.startLat,t.startLon), arrivee:dts(endTs)+' '+pos(t.lastLat,t.lastLon),\n        vent_direction:cardinal(twdMoy), vent_force:(twsMoy!=null?f(twsMoy,0)+' kn':''), allure:allure(awaMoy), nav_nuit:(t.night?'Oui':'Non'),\n        distance_mn:f(t.dist,1), jours:jours, vitesse_moy:f(vmoy,1), vitesse_max:f(t.maxKn,1),\n        moteur_estime:moteur, heures_moteur:f(t.motorH,1), pct_moteur:f(motorPct,0)+'%', perf_voile:(perfMoy!=null?f(perfMoy,0)+'%':'') };\n      var row=[fields.date,fields.depart,fields.arrivee,fields.vent_direction,fields.vent_force,fields.allure,fields.nav_nuit,fields.distance_mn,fields.jours,fields.vitesse_moy,fields.vitesse_max,fields.moteur_estime,fields.heures_moteur,fields.pct_moteur,fields.perf_voile];\n      function csv(a){ return a.map(function(v){ v=(v==null?'':''+v); if(v.indexOf(';')>=0||v.indexOf('\"')>=0){v='\"'+v.replace(/\"/g,'\"\"')+'\"';} return v; }).join(';'); }\n      out1={payload: fields, csvline: csv(row)+'\\n', headers:{'content-type':'application/json'}};\n      t={active:false,aboveSince:null,stopSince:null};\n    }\n  } else { t.stopSince=null; }\n}\n\nglobal.set('trip', t);\n// persistance throttlée (ménage la flash eMMC) : écrit aux transitions + toutes les 15 min en nav\nvar out2=null;\nvar lastPersist=global.get('tripLastPersist')||0;\nif(global.get('tripPrevActive')!==t.active || (t.active && now-lastPersist>900000)){ out2={payload: JSON.stringify(t)}; global.set('tripLastPersist', now); }\nglobal.set('tripPrevActive', t.active);\n\n// ---- sortie 3 : échantillon polaire RÉELLE (à la voile uniquement) ----\nvar out3=null;\nvar POLAR_MIN_S=120; var polLast=global.get('polarLastTs')||0;\nif(t.active && !motor && tws!=null && twaDeg!=null && stw!=null && stw>0.5 && pol!=null && now-polLast>=POLAR_MIN_S*1000){\n  out3={payload: dts(now)+';'+f(tws,1)+';'+f(Math.abs(twaDeg),0)+';'+f(stw,2)+';'+f(pol,2)+'\\n'};\n  global.set('polarLastTs', now);\n}\n\nvar stat = t.active ? ('trajet '+t.dist.toFixed(1)+' MN'+(motor?' · moteur?':'')) : 'au repos';\nnode.status({fill:t.active?'green':'grey', shape:t.active?'dot':'ring', text: stat+(sog!=null?(' · '+sog.toFixed(1)+'kn'):'')});\nreturn [out1,out2,out3];",
+    "outputs": 3,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 520,
+    "y": 100,
+    "wires": [
+      [
+        "fn_tocsv",
+        "http_post"
+      ],
+      [
+        "file_trip"
+      ],
+      [
+        "file_polar"
+      ]
+    ]
+  },
+  {
+    "id": "file_csv",
+    "type": "file",
+    "z": "tab_journal",
+    "name": "Ligne -> journal.csv",
+    "filename": "/data/home/nodered/haku_journal.csv",
+    "filenameType": "str",
+    "appendNewline": false,
+    "createDir": true,
+    "overwriteFile": "false",
+    "encoding": "utf8",
+    "x": 760,
+    "y": 60,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "file_trip",
+    "type": "file",
+    "z": "tab_journal",
+    "name": "Sauver trajet en cours",
+    "filename": "/data/home/nodered/haku_trip_current.json",
+    "filenameType": "str",
+    "appendNewline": false,
+    "createDir": true,
+    "overwriteFile": "true",
+    "encoding": "utf8",
+    "x": 770,
+    "y": 110,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "file_polar",
+    "type": "file",
+    "z": "tab_journal",
+    "name": "Echantillon -> polaire_reelle.csv",
+    "filename": "/data/home/nodered/haku_polaire_reelle.csv",
+    "filenameType": "str",
+    "appendNewline": false,
+    "createDir": true,
+    "overwriteFile": "false",
+    "encoding": "utf8",
+    "x": 790,
+    "y": 160,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "inj_start",
+    "type": "inject",
+    "z": "tab_journal",
+    "name": "Au démarrage",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "3",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 120,
+    "y": 240,
+    "wires": [
+      [
+        "file_trip_in"
+      ]
+    ]
+  },
+  {
+    "id": "file_trip_in",
+    "type": "file in",
+    "z": "tab_journal",
+    "name": "Lire trajet en cours",
+    "filename": "/data/home/nodered/haku_trip_current.json",
+    "filenameType": "str",
+    "format": "utf8",
+    "chunk": false,
+    "sendError": false,
+    "encoding": "utf8",
+    "allProps": false,
+    "x": 320,
+    "y": 240,
+    "wires": [
+      [
+        "fn_load"
+      ]
+    ]
+  },
+  {
+    "id": "fn_load",
+    "type": "function",
+    "z": "tab_journal",
+    "name": "Recharger trajet",
+    "func": "try { var t=JSON.parse(msg.payload); if(t && typeof t==='object'){ global.set('trip',t); node.status({fill:'blue',shape:'ring',text:'trajet rechargé'}); } }\ncatch(e){ node.status({fill:'grey',shape:'ring',text:'pas de trajet en cours'}); }\nreturn null;",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 530,
+    "y": 240,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "fn_tocsv",
+    "type": "function",
+    "z": "tab_journal",
+    "name": "-> ligne CSV (backup)",
+    "func": "msg.payload = msg.csvline; return msg;",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 790,
+    "y": 40,
+    "wires": [
+      [
+        "file_csv"
+      ]
+    ]
+  },
+  {
+    "id": "http_post",
+    "type": "http request",
+    "z": "tab_journal",
+    "name": "POST -> Google Sheet (Journal auto)",
+    "method": "POST",
+    "ret": "txt",
+    "paytoqs": "ignore",
+    "url": "https://script.google.com/macros/s/VOTRE_ID_DE_DEPLOIEMENT_APPS_SCRIPT/exec",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 820,
+    "y": 120,
+    "wires": [
+      []
+    ]
+  }
+]

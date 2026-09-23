@@ -1,0 +1,378 @@
+[
+  {
+    "id": "al_tab",
+    "type": "tab",
+    "label": "Anchor light auto v3.1",
+    "disabled": false,
+    "info": ""
+  },
+  {
+    "id": "victron-client-id",
+    "type": "victron-client",
+    "name": "",
+    "showValues": true,
+    "contextStore": true,
+    "enablePolling": false
+  },
+  {
+    "id": "al_readme",
+    "type": "comment",
+    "z": "al_tab",
+    "name": "READ ME / SETUP",
+    "info": "AUTOMATIC ANCHOR LIGHT - Victron Cerbo GX (Venus OS Large) - v3.1\n\nLOGIC : the light is ON only if  (night) AND (away from home port) AND (stationary).\n  night      : from 30 min BEFORE sunset until sunrise (computed on board, no internet)\n  away       : more than the home-port radius (default 3 NM) from the declared home port\n  stationary : speed over ground < 1 kn\nNo home port declared -> the light stays OFF (safe default).\n\nDATA SOURCE : Signal K on the Cerbo itself (http://127.0.0.1:3000) -> nothing to configure\n              in the GPS nodes; position and SOG must be visible in Signal K's Data Browser.\nRELAY       : com.victronenergy.system /Relay/0/State = Cerbo terminal \"Relay 1\" (1 = ON).\n              The relay function must be set to \"Manual\" in the Cerbo settings.\n\nSETUP (once) :\n  1. Deploy.  2. Open the \"Cerbo Relay 1\" node: service \"Venus device\" / path\n  \"Venus relay 1 state\" should be selected (re-select them if not), Deploy again.\n  3. While berthed at your home port, click \"Set home port HERE\".\n     (or edit and click \"Set home port MANUALLY\").\n\nFILES (survive reboots and firmware updates) :\n  /data/home/nodered/.node-red/anchorlight_homeport.json\n  /data/home/nodered/.node-red/anchorlight_lastpos.json\n\nThe relay state is re-asserted every 5 min : a manual change from the Remote Console\nis overridden within 5 min. To force the light, use the physical switch on the panel.\n\nCOLREG rule 30 : a vessel at anchor shows an all-round white light from sunset to sunrise.\nThis automation is an aid; the manual switch always has priority.\nBuilt on \"Haku\", Amel 50 - https://github.com/SLPH77300/anchor-light-auto-cerbo-amel\n",
+    "x": 130,
+    "y": 40,
+    "wires": []
+  },
+  {
+    "id": "al_poll",
+    "type": "inject",
+    "z": "al_tab",
+    "name": "Poll Signal K every 60 s",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "60",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "5",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 170,
+    "y": 120,
+    "wires": [
+      [
+        "al_http"
+      ]
+    ]
+  },
+  {
+    "id": "al_http",
+    "type": "http request",
+    "z": "al_tab",
+    "name": "GET Signal K vessels/self",
+    "method": "GET",
+    "ret": "obj",
+    "paytoqs": "ignore",
+    "url": "http://127.0.0.1:3000/signalk/v1/api/vessels/self",
+    "tls": "",
+    "persist": false,
+    "proxy": "",
+    "insecureHTTPParser": false,
+    "authType": "",
+    "senderr": false,
+    "headers": [],
+    "x": 430,
+    "y": 120,
+    "wires": [
+      [
+        "al_decide"
+      ]
+    ]
+  },
+  {
+    "id": "al_decide",
+    "type": "function",
+    "z": "al_tab",
+    "name": "Decision (night + away from port + stationary)",
+    "func": "// ============================================================================\n//  Anchor light — DECISION node  (runs on every poll, i.e. every 60 s)\n//  Input : msg.payload = JSON of  http://127.0.0.1:3000/signalk/v1/api/vessels/self\n//  Output 1 : {payload: 1|0}  -> Victron relay node  (only on change, re-asserted every 5 polls)\n//  Output 2 : {payload: \"{lat,lon}\"} -> file node (last known position, throttled)\n//\n//  The light is ON only when ALL THREE conditions are true:\n//    NIGHT       sun below the horizon, from 30 min BEFORE sunset until sunrise\n//    AWAY        more than RADIUS (default 3 NM) from the declared home port\n//    STATIONARY  speed over ground below SPEED_MAX_KN (default 1 kn)\n//  If no home port has been declared, the light stays OFF (safe default).\n// ============================================================================\n\n// ---- tunables --------------------------------------------------------------\nvar SUN = -0.833;          // sun altitude (deg) taken as \"night\". -0.833 = official sunset/sunrise, -6 = civil twilight\nvar SPEED_MAX_KN = 1.0;    // above this SOG the boat is \"under way\" -> light never ON\nvar PRE_SUNSET_MIN = 30;   // switch ON this many minutes before sunset\nvar DEFAULT_RADIUS_NM = 3; // home-port radius when the declared port has no radius of its own\nvar REASSERT_EVERY = 5;    // re-send the relay state every N polls (5 polls = 5 min) -> auto-corrects manual changes\nvar PERSIST_MIN_NM = 0.05; // rewrite the last-position file only if moved more than this (≈ 90 m) ...\nvar PERSIST_MAX_MS = 600000; // ... or if the last write is older than this (10 min) -> limits flash wear\n\n// ---- sun altitude (SunCalc-style, no dependency) ---------------------------\nvar rad = Math.PI / 180, dayMs = 86400000, J1970 = 2440588, J2000 = 2451545, e = rad * 23.4397;\nfunction toDays(d) { return d.valueOf() / dayMs - 0.5 + J1970 - J2000; }\nfunction sma(d) { return rad * (357.5291 + 0.98560028 * d); }\nfunction ecl(M) { var C = rad * (1.9148 * Math.sin(M) + 0.02 * Math.sin(2 * M) + 0.0003 * Math.sin(3 * M)); return M + C + rad * 102.9372 + Math.PI; }\nfunction dec(l) { return Math.asin(Math.sin(e) * Math.sin(l)); }\nfunction ra(l) { return Math.atan2(Math.sin(l) * Math.cos(e), Math.cos(l)); }\nfunction sid(d, lw) { return rad * (280.16 + 360.9856235 * d) - lw; }\nfunction sunAlt(dt, la, ln) {\n    var lw = rad * -ln, phi = rad * la, d = toDays(dt), M = sma(d), L = ecl(M), de = dec(L), r = ra(L), H = sid(d, lw) - r;\n    return Math.asin(Math.sin(phi) * Math.sin(de) + Math.cos(phi) * Math.cos(de) * Math.cos(H)) / rad;\n}\n// ---- great-circle distance in nautical miles --------------------------------\nfunction distNM(a, b, c, d) {\n    var R = 3440.065, p = Math.PI / 180, x = (c - a) * p, y = (d - b) * p;\n    var s = Math.sin(x / 2) * Math.sin(x / 2) + Math.cos(a * p) * Math.cos(c * p) * Math.sin(y / 2) * Math.sin(y / 2);\n    return 2 * R * Math.asin(Math.sqrt(s));\n}\nfunction val(o, path) { try { var p = path.split('.'), c = o; for (var i = 0; i < p.length; i++) { c = c[p[i]]; if (c == null) return null; } return c; } catch (err) { return null; } }\n\n// ---- 1. position & speed from Signal K --------------------------------------\nvar d = msg.payload || {};\nvar pos = val(d, 'navigation.position.value');\nvar sogMs = val(d, 'navigation.speedOverGround.value');\nvar lat = (pos && typeof pos.latitude === 'number') ? pos.latitude : null;\nvar lon = (pos && typeof pos.longitude === 'number') ? pos.longitude : null;\nvar fresh = false;\nif (lat != null && lon != null) {\n    fresh = true;\n    global.set('livePos', { lat: lat, lon: lon });\n    global.set('lastPos', { lat: lat, lon: lon });\n} else {\n    // GPS off (typical at anchor): fall back on the last known position\n    var lp = global.get('lastPos');\n    if (lp && typeof lp.lat === 'number') { lat = lp.lat; lon = lp.lon; }\n}\nif (lat == null) { node.status({ fill: 'grey', shape: 'ring', text: 'no position known (check Signal K)' }); return null; }\n\n// ---- 2. throttled persistence of the last position ---------------------------\nvar persistMsg = null;\nif (fresh) {\n    var lw = context.get('lastWrite') || { t: 0 };\n    var moved = (typeof lw.lat === 'number') ? distNM(lat, lon, lw.lat, lw.lon) : 99;\n    if (moved > PERSIST_MIN_NM || (Date.now() - lw.t) > PERSIST_MAX_MS) {\n        context.set('lastWrite', { lat: lat, lon: lon, t: Date.now() });\n        persistMsg = { payload: JSON.stringify({ lat: lat, lon: lon }) };\n    }\n}\n\n// ---- 3. the three conditions --------------------------------------------------\nvar home = global.get('homePort');\nvar kn = (typeof sogMs === 'number') ? sogMs / 0.514444 : 0;   // no SOG -> assumed stationary\nvar moving = kn > SPEED_MAX_KN;\nvar now = new Date();\nvar altNow = sunAlt(now, lat, lon);\nvar altSoon = sunAlt(new Date(now.getTime() + PRE_SUNSET_MIN * 60000), lat, lon);\nvar night = (altNow < SUN) || (altSoon < altNow && altSoon < SUN);   // ON 30 min before sunset, OFF at sunrise\n\nvar wantOn, why;\nif (!home || typeof home.lat !== 'number' || typeof home.lon !== 'number') {\n    wantOn = false;                                   // SAFE DEFAULT: no home port declared -> light stays OFF\n    why = 'HOME PORT NOT SET - click \"Set home port here\"';\n} else {\n    var radius = (typeof home.radius === 'number') ? home.radius : DEFAULT_RADIUS_NM;\n    var dist = distNM(lat, lon, home.lat, home.lon);\n    var away = dist > radius;\n    wantOn = night && away && !moving;\n    why = (night ? 'night' : 'day') + ' | ' + (away ? dist.toFixed(1) + ' NM from port' : 'in port') + ' | ' + kn.toFixed(1) + ' kn' + (fresh ? '' : ' (last pos)');\n}\n\n// ---- 4. drive the relay: on change, and re-assert every REASSERT_EVERY polls ----\nvar beat = (context.get('beat') || 0) + 1;\ncontext.set('beat', beat);\nvar last = context.get('lastState');\nvar changed = (wantOn !== last);\ncontext.set('lastState', wantOn);\nvar colour = (!home || typeof home.lat !== 'number') ? 'red' : (wantOn ? 'green' : 'blue');\nnode.status({ fill: colour, shape: changed ? 'dot' : 'ring', text: (wantOn ? 'LIGHT ON' : 'light off') + ' - ' + why });\nif (!changed && (beat % REASSERT_EVERY) !== 0) { return [null, persistMsg]; }\nreturn [{ payload: wantOn ? 1 : 0 }, persistMsg];\n",
+    "outputs": 2,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 760,
+    "y": 120,
+    "wires": [
+      [
+        "al_relay"
+      ],
+      [
+        "al_wlast"
+      ]
+    ]
+  },
+  {
+    "id": "al_relay",
+    "type": "victron-output-relay",
+    "z": "al_tab",
+    "client": "victron-client-id",
+    "service": "com.victronenergy.system/0",
+    "path": "/Relay/0/State",
+    "serviceObj": {
+      "service": "com.victronenergy.system/0",
+      "name": "Venus device"
+    },
+    "pathObj": {
+      "path": "/Relay/0/State",
+      "type": "enum",
+      "name": "Venus relay 1 state",
+      "enum": {
+        "0": "Open",
+        "1": "Closed"
+      }
+    },
+    "initial": "",
+    "onlyChanges": false,
+    "name": "Cerbo Relay 1 (anchor light)",
+    "x": 1110,
+    "y": 100,
+    "wires": []
+  },
+  {
+    "id": "al_wlast",
+    "type": "file",
+    "z": "al_tab",
+    "name": "write last position",
+    "filename": "/data/home/nodered/.node-red/anchorlight_lastpos.json",
+    "filenameType": "str",
+    "appendNewline": false,
+    "createDir": true,
+    "overwriteFile": "true",
+    "encoding": "utf8",
+    "x": 1090,
+    "y": 160,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "al_inj_here",
+    "type": "inject",
+    "z": "al_tab",
+    "name": "Set home port HERE (click while at your berth)",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 230,
+    "y": 260,
+    "wires": [
+      [
+        "al_capture"
+      ]
+    ]
+  },
+  {
+    "id": "al_inj_manual",
+    "type": "inject",
+    "z": "al_tab",
+    "name": "Set home port MANUALLY (edit lat / lon / radius NM)",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "{\"lat\":0,\"lon\":0,\"radius\":3}",
+    "payloadType": "json",
+    "x": 240,
+    "y": 310,
+    "wires": [
+      [
+        "al_capture"
+      ]
+    ]
+  },
+  {
+    "id": "al_capture",
+    "type": "function",
+    "z": "al_tab",
+    "name": "Set home port",
+    "func": "// ============================================================================\n//  \"Set home port\" node\n//  Triggered by the inject \"Set home port HERE (click while at your berth)\"\n//  or by \"Set home port MANUALLY\" whose payload is {\"lat\": .., \"lon\": .., \"radius\": ..}.\n//  Saves the home port in the global context and returns it to be written to disk.\n// ============================================================================\nvar DEFAULT_RADIUS_NM = 3;\nvar lat, lon, radius;\n\nif (msg.payload && typeof msg.payload === 'object' && typeof msg.payload.lat === 'number' && typeof msg.payload.lon === 'number') {\n    lat = msg.payload.lat; lon = msg.payload.lon;                       // manual coordinates\n    radius = (typeof msg.payload.radius === 'number') ? msg.payload.radius : DEFAULT_RADIUS_NM;\n} else {\n    var lp = global.get('livePos') || global.get('lastPos');            // current GPS position\n    if (!lp || typeof lp.lat !== 'number') {\n        node.status({ fill: 'red', shape: 'ring', text: 'no GPS position yet - cannot set home port' });\n        return null;\n    }\n    lat = lp.lat; lon = lp.lon;\n    var ex = global.get('homePort') || {};\n    radius = (typeof ex.radius === 'number') ? ex.radius : DEFAULT_RADIUS_NM;\n}\nif (lat === 0 && lon === 0) {                                          // the manual inject was not edited\n    node.status({ fill: 'red', shape: 'ring', text: 'edit lat/lon in the inject node first' });\n    return null;\n}\nvar home = { lat: lat, lon: lon, radius: radius };\nglobal.set('homePort', home);\nnode.status({ fill: 'green', shape: 'dot', text: 'home port ' + lat.toFixed(4) + ', ' + lon.toFixed(4) + ' - radius ' + radius + ' NM' });\nmsg.payload = JSON.stringify(home);\nreturn msg;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 560,
+    "y": 285,
+    "wires": [
+      [
+        "al_wport"
+      ]
+    ]
+  },
+  {
+    "id": "al_wport",
+    "type": "file",
+    "z": "al_tab",
+    "name": "write home port",
+    "filename": "/data/home/nodered/.node-red/anchorlight_homeport.json",
+    "filenameType": "str",
+    "appendNewline": false,
+    "createDir": true,
+    "overwriteFile": "true",
+    "encoding": "utf8",
+    "x": 790,
+    "y": 285,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "al_start",
+    "type": "inject",
+    "z": "al_tab",
+    "name": "At start-up",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": true,
+    "onceDelay": "2",
+    "topic": "",
+    "payload": "",
+    "payloadType": "date",
+    "x": 150,
+    "y": 420,
+    "wires": [
+      [
+        "al_rport",
+        "al_rlast"
+      ]
+    ]
+  },
+  {
+    "id": "al_rport",
+    "type": "file in",
+    "z": "al_tab",
+    "name": "read home port",
+    "filename": "/data/home/nodered/.node-red/anchorlight_homeport.json",
+    "filenameType": "str",
+    "format": "utf8",
+    "chunk": false,
+    "sendError": false,
+    "encoding": "none",
+    "allProps": false,
+    "x": 380,
+    "y": 400,
+    "wires": [
+      [
+        "al_lport"
+      ]
+    ]
+  },
+  {
+    "id": "al_lport",
+    "type": "function",
+    "z": "al_tab",
+    "name": "Load home port",
+    "func": "// ============================================================================\n//  \"Load home port\" node — runs once at start-up (after a reboot or a deploy).\n//  Reads the home-port file written by \"Set home port\". If the file is missing\n//  or invalid, NO home port is set and the decision node keeps the light OFF.\n// ============================================================================\ntry {\n    var h = JSON.parse(msg.payload);\n    if (h && typeof h.lat === 'number' && typeof h.lon === 'number') {\n        global.set('homePort', h);\n        node.status({ fill: 'green', shape: 'dot', text: 'home port ' + h.lat.toFixed(3) + ', ' + h.lon.toFixed(3) + ' (r=' + (h.radius || 3) + ' NM)' });\n        return null;\n    }\n} catch (err) { /* empty or invalid file */ }\nglobal.set('homePort', null);\nnode.status({ fill: 'red', shape: 'ring', text: 'no home port saved - click \"Set home port here\"' });\nreturn null;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 600,
+    "y": 400,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "al_rlast",
+    "type": "file in",
+    "z": "al_tab",
+    "name": "read last position",
+    "filename": "/data/home/nodered/.node-red/anchorlight_lastpos.json",
+    "filenameType": "str",
+    "format": "utf8",
+    "chunk": false,
+    "sendError": false,
+    "encoding": "none",
+    "allProps": false,
+    "x": 390,
+    "y": 450,
+    "wires": [
+      [
+        "al_llast"
+      ]
+    ]
+  },
+  {
+    "id": "al_llast",
+    "type": "function",
+    "z": "al_tab",
+    "name": "Load last position",
+    "func": "// ============================================================================\n//  \"Load last position\" node — runs once at start-up.\n//  Restores the last known GPS position so that the decision keeps working\n//  after a reboot even if the GPS is switched off (typical at anchor).\n// ============================================================================\ntry {\n    var p = JSON.parse(msg.payload);\n    if (p && typeof p.lat === 'number' && typeof p.lon === 'number') {\n        global.set('lastPos', p);\n        node.status({ fill: 'green', shape: 'dot', text: 'last position restored ' + p.lat.toFixed(3) + ', ' + p.lon.toFixed(3) });\n        return null;\n    }\n} catch (err) { /* empty or invalid file */ }\nnode.status({ fill: 'grey', shape: 'ring', text: 'no saved position yet' });\nreturn null;\n",
+    "outputs": 1,
+    "noerr": 0,
+    "initialize": "",
+    "finalize": "",
+    "libs": [],
+    "x": 610,
+    "y": 450,
+    "wires": [
+      []
+    ]
+  },
+  {
+    "id": "al_test_on",
+    "type": "inject",
+    "z": "al_tab",
+    "name": "TEST relay ON (auto-corrected within 5 min)",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "1",
+    "payloadType": "num",
+    "x": 230,
+    "y": 540,
+    "wires": [
+      [
+        "al_relay"
+      ]
+    ]
+  },
+  {
+    "id": "al_test_off",
+    "type": "inject",
+    "z": "al_tab",
+    "name": "TEST relay OFF",
+    "props": [
+      {
+        "p": "payload"
+      }
+    ],
+    "repeat": "",
+    "crontab": "",
+    "once": false,
+    "onceDelay": 0.1,
+    "topic": "",
+    "payload": "0",
+    "payloadType": "num",
+    "x": 150,
+    "y": 590,
+    "wires": [
+      [
+        "al_relay"
+      ]
+    ]
+  }
+]
