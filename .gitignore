@@ -1,0 +1,27 @@
+# Secrets et données du bord — ne JAMAIS publier
+haku.env
+*.env
+!haku.env.example
+flows_cred.json
+*_cred.json
+authorized_keys
+id_ed25519*
+*.pem
+*.key
+
+# Données personnelles de navigation
+journal_export_*.csv
+*.gpx
+tracks/
+journal/
+
+# Sauvegardes et fichiers temporaires
+*.bak*
+*.tar.gz
+*.zip
+node_modules/
+.node-red/
+__pycache__/
+*.pyc
+.DS_Store
+Thumbs.db
