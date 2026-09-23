@@ -1,0 +1,15 @@
+# Haku Pi — généré le 27/08/2026
+# Installé en /etc/systemd/system/haku-healthcheck.timer
+# Activé par install.sh : systemctl enable --now haku-healthcheck.timer
+[Unit]
+Description=Haku - healthcheck Node-RED toutes les 2 minutes
+
+[Timer]
+# Premier contrôle 3 min après le boot (laisse Node-RED démarrer),
+# puis toutes les 2 min après la fin du contrôle précédent.
+OnBootSec=3min
+OnUnitActiveSec=2min
+AccuracySec=30s
+
+[Install]
+WantedBy=timers.target

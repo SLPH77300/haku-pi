@@ -1,0 +1,11 @@
+# Haku Pi — généré le 27/08/2026
+# Installé en /etc/systemd/system/haku-backup.service
+# Déclenché par haku-backup.timer (tous les jours à 04:10).
+[Unit]
+Description=Haku - sauvegarde flows + configuration vers /boot/firmware/haku-backup
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/haku/haku.env
+ExecStart=/opt/haku/scripts/backup-flows.sh
+TimeoutStartSec=180

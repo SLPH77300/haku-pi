@@ -1,0 +1,13 @@
+# Haku Pi — généré le 27/08/2026
+# Installé en /etc/systemd/system/haku-backup.timer
+[Unit]
+Description=Haku - sauvegarde quotidienne (04:10) des flows et de la config
+
+[Timer]
+OnCalendar=*-*-* 04:10:00
+# Rattrape une occurrence manquée (coupure de courant pendant la nuit)
+Persistent=true
+AccuracySec=5min
+
+[Install]
+WantedBy=timers.target

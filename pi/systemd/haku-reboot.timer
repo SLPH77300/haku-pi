@@ -1,0 +1,14 @@
+# Haku Pi — généré le 27/08/2026
+# Installé en /etc/systemd/system/haku-reboot.timer
+# Désactivation : sudo systemctl disable --now haku-reboot.timer
+[Unit]
+Description=Haku - reboot preventif chaque dimanche a 04:30
+
+[Timer]
+OnCalendar=Sun *-*-* 04:30:00
+# PAS de Persistent=true : un reboot « en rattrapage » au milieu de la journée
+# serait plus gênant qu'utile ; s'il est manqué, le suivant aura lieu dimanche.
+AccuracySec=5min
+
+[Install]
+WantedBy=timers.target

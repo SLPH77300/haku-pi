@@ -1,0 +1,25 @@
+# Haku Pi — généré le 27/08/2026
+# Unité systemd UTILISATEUR, installée en /etc/systemd/user/haku-kiosk.service.
+#
+# Démarrée par la ligne Haku de ~/.config/labwc/autostart (ou wayfire.ini)
+# après l'ouverture de session graphique automatique :
+#   systemctl --user import-environment WAYLAND_DISPLAY XDG_RUNTIME_DIR DISPLAY
+#   systemctl --user start haku-kiosk.service
+#
+# Ainsi Chromium est supervisé par systemd --user : s'il plante, il est
+# relancé sans toucher au reste de la session.
+[Unit]
+Description=Haku - Chromium kiosk (dashboard Node-RED plein ecran)
+# Pas de dépendance réseau : kiosk.sh attend lui-même que le dashboard réponde.
+
+[Service]
+Type=simple
+EnvironmentFile=-/etc/haku/haku.env
+ExecStart=/opt/haku/scripts/kiosk.sh
+Restart=always
+RestartSec=8
+# Chromium peut mettre du temps à s'éteindre proprement
+TimeoutStopSec=15
+
+[Install]
+WantedBy=default.target

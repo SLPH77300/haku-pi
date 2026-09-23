@@ -1,0 +1,16 @@
+# Haku Pi — généré le 27/08/2026
+# Installé en /etc/systemd/system/haku-reboot.service
+# Déclenché par haku-reboot.timer (dimanche 04:30).
+#
+# Reboot hebdomadaire préventif : purge les fuites mémoire éventuelles
+# (Chromium…), revalide le démarrage complet de la chaîne, force un fsck
+# périodique. Une sauvegarde est tentée juste avant.
+#
+# POUR LE DÉSACTIVER :  sudo systemctl disable --now haku-reboot.timer
+[Unit]
+Description=Haku - reboot hebdomadaire preventif (desactivable)
+
+[Service]
+Type=oneshot
+ExecStartPre=-/opt/haku/scripts/backup-flows.sh
+ExecStart=/usr/bin/systemctl reboot

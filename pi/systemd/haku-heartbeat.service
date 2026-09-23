@@ -1,0 +1,15 @@
+# Haku Pi — v1.2.0
+# Installé en /etc/systemd/system/haku-heartbeat.service
+# Déclenché par haku-heartbeat.timer (toutes les 10 min).
+# Heartbeat « dead-man » : le Pi pingue HEALTHCHECK_URL UNIQUEMENT quand
+# /health répond en local — le SILENCE déclenche l'alerte du service externe
+# (healthchecks.io), qui prévient si le bateau disparaît d'internet.
+[Unit]
+Description=Haku - heartbeat dead-man vers HEALTHCHECK_URL (vide = inactif)
+After=network.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/haku/haku.env
+ExecStart=/opt/haku/scripts/heartbeat.sh
+TimeoutStartSec=60

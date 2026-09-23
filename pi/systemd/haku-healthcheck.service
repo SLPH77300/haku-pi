@@ -1,0 +1,13 @@
+# Haku Pi — généré le 27/08/2026
+# Installé en /etc/systemd/system/haku-healthcheck.service
+# Déclenché par haku-healthcheck.timer (toutes les 2 min).
+[Unit]
+Description=Haku - healthcheck Node-RED (redemarre le service s'il ne repond plus)
+After=network.target
+
+[Service]
+Type=oneshot
+EnvironmentFile=-/etc/haku/haku.env
+ExecStart=/opt/haku/scripts/healthcheck.sh
+# Le script fait lui-même ses retries ; borne dure de sécurité :
+TimeoutStartSec=120

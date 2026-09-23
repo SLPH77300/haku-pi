@@ -1,0 +1,16 @@
+# Haku Pi — v1.2.0
+# Installé en /etc/systemd/system/haku-heartbeat.timer
+# Activé par install.sh : systemctl enable --now haku-heartbeat.timer
+# (inoffensif si HEALTHCHECK_URL est vide : le script sort immédiatement).
+[Unit]
+Description=Haku - heartbeat dead-man toutes les 10 minutes
+
+[Timer]
+# Premier ping 5 min après le boot (Node-RED doit être debout), puis toutes
+# les 10 min. Côté healthchecks.io : period 10 min, grace 10-15 min.
+OnBootSec=5min
+OnUnitActiveSec=10min
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target
