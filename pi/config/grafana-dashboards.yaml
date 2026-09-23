@@ -1,0 +1,16 @@
+# Haku Pi — v1.2.0
+# Provisioning des dashboards Grafana (fichiers JSON du dépôt, servis depuis
+# /opt/haku/grafana/dashboards). Installé en
+# /etc/grafana/provisioning/dashboards/haku.yaml par install.sh.
+apiVersion: 1
+
+providers:
+  - name: haku
+    folder: Haku
+    type: file
+    disableDeletion: false
+    updateIntervalSeconds: 120
+    allowUiUpdates: true
+    options:
+      path: /opt/haku/grafana/dashboards
+      foldersFromFilesStructure: false
