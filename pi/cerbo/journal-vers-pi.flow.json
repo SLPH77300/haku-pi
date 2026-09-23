@@ -1,0 +1,36 @@
+[
+    {
+        "id": "haku_pi_copy_prep",
+        "type": "function",
+        "name": "Haku Pi - genere le 27/08/2026 : copie journal vers le Pi",
+        "func": "// ============================================================\n// PATCH « Journal vers Pi » — voir cerbo/PATCH_Journal_vers_Pi.md\n// Duplique la ligne de journal (payload OBJET des 15 champs, déjà\n// construite en amont) vers le Raspberry Pi du bord.\n// Fire-and-forget : timeout court, échec SILENCIEUX (le CSV local\n// du Cerbo et le Google Sheet restent les filets de sécurité).\n// ============================================================\n// >>> À ADAPTER : IP FIXE du Pi (réservation DHCP dans le Pepwave) <<<\nconst PI_HOST = '192.168.8.20';\n\nmsg.url = 'http://' + PI_HOST + ':1880/journal';\nmsg.method = 'POST';\nmsg.requestTimeout = 3000;\n// payload transmis tel quel (objet JSON)\nreturn msg;",
+        "outputs": 1,
+        "timeout": 0,
+        "noerr": 0,
+        "initialize": "",
+        "finalize": "",
+        "libs": [],
+        "x": 400,
+        "y": 620,
+        "wires": [["haku_pi_copy_post"]]
+    },
+    {
+        "id": "haku_pi_copy_post",
+        "type": "http request",
+        "name": "POST /journal (Pi Haku)",
+        "method": "use",
+        "ret": "txt",
+        "paytoqs": "ignore",
+        "url": "",
+        "tls": "",
+        "persist": false,
+        "proxy": "",
+        "insecureHTTPParser": false,
+        "authType": "",
+        "senderr": true,
+        "headers": [],
+        "x": 640,
+        "y": 620,
+        "wires": [[]]
+    }
+]
