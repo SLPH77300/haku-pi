@@ -1,0 +1,85 @@
+{
+  "__comment": "Haku Pi v1.2.0 - dashboard Meteo bord : vent moyen + rafales (kn) et barometre (hPa). Variable bucket : haku_raw (30 j, 1 min) ou haku_agg (730 j, 10 min).",
+  "uid": "haku-meteo",
+  "title": "Haku — Météo bord",
+  "tags": ["haku"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": { "from": "now-48h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "bucket",
+        "label": "Bucket (haku_raw 30 j · haku_agg 730 j)",
+        "type": "custom",
+        "query": "haku_raw,haku_agg",
+        "current": { "text": "haku_raw", "value": "haku_raw" },
+        "options": [
+          { "text": "haku_raw", "value": "haku_raw", "selected": true },
+          { "text": "haku_agg", "value": "haku_agg", "selected": false }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "Vent — moyenne et rafales",
+      "datasource": { "type": "influxdb", "uid": "haku-influx" },
+      "gridPos": { "h": 11, "w": 24, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "haku-influx" },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"meteo\" and r._field == \"tws_kn\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Vent moyen\"}))"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "influxdb", "uid": "haku-influx" },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"meteo\" and r._field == \"gust_kn\")\n  |> aggregateWindow(every: v.windowPeriod, fn: max, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Rafales\"}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "suffix: kn",
+          "min": 0,
+          "custom": { "lineWidth": 1, "fillOpacity": 8, "pointSize": 3, "spanNulls": 900000 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Vent moyen" },
+            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "#3987e5" } } ] },
+          { "matcher": { "id": "byName", "options": "Rafales" },
+            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "#d95926" } } ] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Baromètre",
+      "datasource": { "type": "influxdb", "uid": "haku-influx" },
+      "gridPos": { "h": 9, "w": 24, "x": 0, "y": 11 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "haku-influx" },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"meteo\" and r._field == \"press_hpa\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Pression\"}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "pressurehpa",
+          "color": { "mode": "fixed", "fixedColor": "#199e70" },
+          "custom": { "lineWidth": 1, "fillOpacity": 8, "pointSize": 3, "spanNulls": 900000 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    }
+  ]
+}

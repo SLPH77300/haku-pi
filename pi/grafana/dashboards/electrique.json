@@ -1,0 +1,132 @@
+{
+  "__comment": "Haku Pi v1.2.0 - dashboard Electrique : SOC, tension, courant, solaire et conso DC. Variable bucket : haku_raw (30 j, 1 min) ou haku_agg (730 j, 10 min).",
+  "uid": "haku-electrique",
+  "title": "Haku — Électrique",
+  "tags": ["haku"],
+  "timezone": "browser",
+  "editable": true,
+  "graphTooltip": 1,
+  "schemaVersion": 39,
+  "refresh": "1m",
+  "time": { "from": "now-48h", "to": "now" },
+  "templating": {
+    "list": [
+      {
+        "name": "bucket",
+        "label": "Bucket (haku_raw 30 j · haku_agg 730 j)",
+        "type": "custom",
+        "query": "haku_raw,haku_agg",
+        "current": { "text": "haku_raw", "value": "haku_raw" },
+        "options": [
+          { "text": "haku_raw", "value": "haku_raw", "selected": true },
+          { "text": "haku_agg", "value": "haku_agg", "selected": false }
+        ]
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "timeseries",
+      "title": "État de charge (SOC)",
+      "datasource": { "type": "influxdb", "uid": "haku-influx" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "haku-influx" },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"elec\" and r._field == \"soc\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"SOC\"}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "min": 0,
+          "max": 100,
+          "color": { "mode": "fixed", "fixedColor": "#199e70" },
+          "custom": { "lineWidth": 1, "fillOpacity": 10, "pointSize": 3, "spanNulls": 900000 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 2,
+      "type": "timeseries",
+      "title": "Tension parc (24 V LiFePO4)",
+      "datasource": { "type": "influxdb", "uid": "haku-influx" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "haku-influx" },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"elec\" and r._field == \"v\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Tension\"}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "volt",
+          "color": { "mode": "fixed", "fixedColor": "#3987e5" },
+          "custom": { "lineWidth": 1, "fillOpacity": 10, "pointSize": 3, "spanNulls": 900000 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 3,
+      "type": "timeseries",
+      "title": "Courant batterie (+ = charge)",
+      "datasource": { "type": "influxdb", "uid": "haku-influx" },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "haku-influx" },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"elec\" and r._field == \"i\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Courant\"}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "amp",
+          "color": { "mode": "fixed", "fixedColor": "#fab219" },
+          "custom": { "lineWidth": 1, "fillOpacity": 10, "pointSize": 3, "spanNulls": 900000 }
+        },
+        "overrides": []
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Solaire et consommation DC",
+      "datasource": { "type": "influxdb", "uid": "haku-influx" },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": { "type": "influxdb", "uid": "haku-influx" },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"elec\" and r._field == \"pv_w\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Solaire\"}))"
+        },
+        {
+          "refId": "B",
+          "datasource": { "type": "influxdb", "uid": "haku-influx" },
+          "query": "from(bucket: \"${bucket}\")\n  |> range(start: v.timeRangeStart, stop: v.timeRangeStop)\n  |> filter(fn: (r) => r._measurement == \"elec\" and r._field == \"dc_w\")\n  |> aggregateWindow(every: v.windowPeriod, fn: mean, createEmpty: false)\n  |> map(fn: (r) => ({r with _field: \"Conso DC\"}))"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "watt",
+          "custom": { "lineWidth": 1, "fillOpacity": 8, "pointSize": 3, "spanNulls": 900000 }
+        },
+        "overrides": [
+          { "matcher": { "id": "byName", "options": "Solaire" },
+            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "#d95926" } } ] },
+          { "matcher": { "id": "byName", "options": "Conso DC" },
+            "properties": [ { "id": "color", "value": { "mode": "fixed", "fixedColor": "#8a897f" } } ] }
+        ]
+      },
+      "options": { "legend": { "displayMode": "list", "placement": "bottom" }, "tooltip": { "mode": "multi" } }
+    }
+  ]
+}
