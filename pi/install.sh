@@ -3,7 +3,7 @@
 # Haku Pi — v1.2.0 (30/08/2026, base 27/08/2026)
 # install.sh — installation complète et IDEMPOTENTE du Pi du bord (Haku).
 #
-# Usage :  sudo ./install.sh          (depuis le dossier du dépôt)
+# Usage :  sudo bash install.sh          (depuis le dossier du dépôt)
 #          relançable autant de fois que nécessaire (mise à jour comprise).
 #
 # Cible : Raspberry Pi 4 Model B, Raspberry Pi OS Bookworm 64-bit
@@ -62,7 +62,7 @@ set_env_var() {
 
 # -----------------------------------------------------------------------------
 require_root() {
-    [[ "$(id -u)" -eq 0 ]] || die "lancer avec sudo : sudo ./install.sh"
+    [[ "$(id -u)" -eq 0 ]] || die "lancer avec sudo : sudo bash install.sh"
 }
 
 # -----------------------------------------------------------------------------
