@@ -25,7 +25,7 @@
 ## What's in this repository
 
 ```
-pi/            the Raspberry Pi package — run `sudo ./install.sh`
+pi/            the Raspberry Pi package — run `sudo bash install.sh`
   install.sh   idempotent installer (Node-RED, Dashboard 2.0, InfluxDB, Grafana, hardening)
   node-red/    flows.json — the whole application
   config/      haku.env.example — every setting, commented
@@ -47,9 +47,9 @@ docs/
 # on a Raspberry Pi 4, Raspberry Pi OS Lite 64-bit, booted from SSD
 git clone https://github.com/SLPH77300/haku-pi.git
 cd haku-pi/pi
-sudo ./install.sh
+sudo bash install.sh
 sudo nano /etc/haku/haku.env        # Cerbo IP, SMTP, Tailscale key…
-sudo ./install.sh                   # apply
+sudo bash install.sh                   # apply
 ```
 
 Then open `http://<pi>:1880/dashboard/haku`. The tutorial takes it from there — network, Cerbo settings, relay module, wiring, anchor light, tests.
