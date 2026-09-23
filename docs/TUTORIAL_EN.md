@@ -104,7 +104,7 @@ vcgencmd get_throttled
 ```bash
 git clone https://github.com/SLPH77300/haku-pi.git
 cd haku-pi/pi
-sudo ./install.sh
+sudo bash install.sh
 ```
 
 The script is **idempotent** — run it again any time, it only changes what needs changing. It installs Node-RED with Dashboard 2.0, InfluxDB and Grafana, hardens the system for a boat (logs in RAM, hardware watchdog, weekly reboot, firewall), and creates `/etc/haku/haku.env` from the example.
@@ -171,7 +171,7 @@ Then set the Node-RED editor password (the dashboard itself is open on the LAN, 
 
 ```bash
 sudo /opt/haku/scripts/gen-adminauth.sh
-sudo ./install.sh                 # re-run to apply everything
+sudo bash install.sh                 # re-run to apply everything
 ```
 
 Open **`http://haku:1880/dashboard/haku`** on a phone on the boat's Wi-Fi. You should see the Surveillance page with live battery data within a minute.
@@ -327,7 +327,7 @@ Test the whole chain with the **"Tester l'alerte email"** button on the Bord pag
 ## 12. Maintenance
 
 - **Backups** run nightly to `/boot/firmware/haku-backup` (flows, journal, tracks, ports, `haku.env`). That's on the *same* SSD — copy that folder off the boat regularly (`scp -r bord@haku:/boot/firmware/haku-backup .`). A proper off-boat backup is on the roadmap.
-- **Update:** `cd haku-pi && git pull && cd pi && sudo ./install.sh`.
+- **Update:** `cd haku-pi && git pull && cd pi && sudo bash install.sh`.
 - **Health:** `curl http://haku:1880/health` — a JSON with everything that matters; `flow_errors` must be 0.
 - **Weekly reboot** is scheduled (Sunday 04:30) — a Pi left alone for months appreciates it.
 

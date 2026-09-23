@@ -113,10 +113,10 @@ Depuis votre poste (le Pi doit être joignable — `haku.local` ou son IP) :
 scp -r haku-pi/ bord@haku.local:~
 ssh bord@haku.local
 cd ~/haku-pi
-sudo ./install.sh
+sudo bash install.sh
 ```
 
-Important : lancer `sudo ./install.sh` **depuis le compte du bord** (celui créé
+Important : lancer `sudo bash install.sh` **depuis le compte du bord** (celui créé
 par l'Imager, ex. `bord`), jamais depuis une session root (`sudo -i`/`su`) —
 le script détecte l'utilisateur via `sudo` pour installer Node-RED et le kiosk
 sous le bon compte.
@@ -265,7 +265,7 @@ ne change jamais).
 1. Créer un compte tailscale.com (gratuit jusqu'à 3 utilisateurs/100 machines).
 2. Admin console → `Settings → Keys` → **Generate auth key…** — cocher
    `Reusable` et si possible `Pre-approved`. Copier `tskey-auth-…` dans
-   `TS_AUTHKEY` (haku.env), puis `sudo ./install.sh` (relance idempotente).
+   `TS_AUTHKEY` (haku.env), puis `sudo bash install.sh` (relance idempotente).
 3. **Approuver la route** : Admin console → Machines → `haku` → menu
    `…` → `Edit route settings` → cocher `192.168.8.0/24` (= `SUBNET_BORD`).
    Le Pi joue alors les **subnet router** : depuis le téléphone (app
@@ -325,7 +325,7 @@ indépendants : VRM alerte même si le Pi est mort.
   (pas de méthode officielle de masquage à ce jour).
 - **Écran éteint au boot** : si l'écran HDMI est mis sous tension après le
   Pi et reste noir, mettre `KIOSK_FORCE_HDMI=1` (haku.env) puis
-  `sudo ./install.sh` : ajoute `video=HDMI-A-1:1920x1080M@60D` à
+  `sudo bash install.sh` : ajoute `video=HDMI-A-1:1920x1080M@60D` à
   `cmdline.txt` (syntaxe KMS standard — `TODO-VERIFIER-A-BORD` avec votre
   écran ; adapter `KIOSK_HDMI_MODE` à sa résolution native).
 - Éteindre l'affichage à distance (le dashboard reste servi) :
@@ -664,7 +664,7 @@ Après installation complète, dérouler dans l'ordre :
 **Débogage** : les logs étant en RAM, pour investiguer un problème récurrent :
 `sudo rm /etc/systemd/journald.conf.d/10-haku-volatile.conf && sudo systemctl
 restart systemd-journald` (logs persistants), investiguer, puis relancer
-`sudo ./install.sh` pour remettre le mode volatile.
+`sudo bash install.sh` pour remettre le mode volatile.
 
 **Mise à jour** : `sudo /opt/haku/scripts/update.sh` (recopie + redéploiement),
 `--palette` pour mettre à jour Dashboard 2.0. Si vous avez **modifié les flux

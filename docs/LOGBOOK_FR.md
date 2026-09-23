@@ -21,7 +21,7 @@ Cerbo GX (Signal K + Node-RED)
    │                                              │  ajoute la ligne
    │                                              ▼
    │                                        Google Sheet « Haku - Journal auto »
-   │                                        onglet « Journal auto » (compte SLPH77300@gmail.com)
+   │                                        onglet « Journal auto » (compte votre-compte@gmail.com)
    └─ 4. En parallèle : sauvegarde locale CSV + collecte polaires réelles
 ```
 
@@ -75,7 +75,7 @@ Throttle flash : sauvegarde « trajet en cours » toutes les **15 min** (+ trans
 - Chaîne : `Poll 45s → GET Signal K (127.0.0.1:3000) → Journal + moteur + polaire →` [ `POST → Google Sheet` (URL /exec gravée) · `Ligne → journal.csv` · `Sauver trajet en cours` · `Échantillon → polaire_reelle.csv` ]. Branche démarrage : `Au démarrage → Lire trajet → Recharger trajet` (survit aux reboots).
 
 ## 7. Côté Google — le script
-- Google Sheet **« Haku - Journal auto »** (compte **SLPH77300@gmail.com**), onglet **« Journal auto »**.
+- Google Sheet **« Haku - Journal auto »** (compte **votre-compte@gmail.com**), onglet **« Journal auto »**.
 - **Apps Script** (Extensions → Apps Script) : `setup()` crée/met en forme l'onglet ; `doPost(e)` reçoit le JSON et ajoute la ligne.
 - Déployé en **Application Web** (Exécuter en tant que : Moi · Accès : **Tout le monde**) → **URL `/exec`** (collée dans le nœud Node-RED). Un GET navigateur affiche « doGet introuvable » = **normal** (on ne gère que le POST).
 
@@ -116,4 +116,4 @@ Throttle flash : sauvegarde « trajet en cours » toutes les **15 min** (+ trans
 - Flow : `HAKU_NodeRED_JournalBord_v1.json` (dossier Journal de bord).
 - Polaires source : `Polaire/AMEL 50- polaires de vitesse - VPP 17-01-17.pdf`.
 - Runtime Cerbo : `/data/haku_journal.csv`, `/data/haku_polaire_reelle.csv`, `/data/haku_trip_current.json`.
-- Google : Sheet « Haku - Journal auto » (Drive de SLPH77300@gmail.com) + script Apps Script associé.
+- Google : Sheet « Haku - Journal auto » (Drive de votre-compte@gmail.com) + script Apps Script associé.
